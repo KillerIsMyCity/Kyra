@@ -94,6 +94,7 @@ int main(int argc, char* argv[]) {
     
     cmd.argParse(argc, argv);
     
+    // sleep(10);
     vmem_free(g_vmem);    
     return 0;
 }

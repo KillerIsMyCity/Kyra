@@ -1,5 +1,6 @@
 #include "ELF.h"
 #include "../../tools/log.h"
+#include "../vmem.h"
 
 ELFLoader::ELFLoader() {
     this->elf = {};
@@ -53,6 +54,7 @@ int ELFLoader::_loadHeader() { // only for when importing from file, not from SE
     // fread(&this->elf.ELF64_header, 1, sizeof(Elf64_Ehdr), this->elf.file.file);
     // return 0;
     // TODO
+    return -1;
 }
 
 int ELFLoader::_loadProgramHeaders(){
@@ -64,9 +66,35 @@ int ELFLoader::_loadProgramHeaders(){
         fseek(this->elf.file.file, offset, SEEK_SET);
         fread(&phdr, 1, sizeof(Elf64_Phdr), this->elf.file.file);
         if (this->debugEnabled == true) {
-            LOGD("ELF", "Program Header %zu: Type: 0x%08x, Offset: 0x%016lx, VAddr: 0x%016lx, PAddr: 0x%016lx, FileSz: %lu, MemSz: %lu, Flags: 0x%08x, Align: %lu", i, phdr.p_type, phdr.p_offset, phdr.p_vaddr, phdr.p_paddr, phdr.p_filesz, phdr.p_memsz, phdr.p_flags, phdr.p_align);
+            LOGD("ELF", "Program Header %zu: Type: 0x%08x, Offset: 0x%016lx, VAddr: 0x%016lx, PAddr: 0x%016lx, FileSz: %10lu, MemSz: %08lu, Flags: 0x%08x, Align: %lu", i, phdr.p_type, phdr.p_offset, phdr.p_vaddr, phdr.p_paddr, phdr.p_filesz, phdr.p_memsz, phdr.p_flags, phdr.p_align);
         }
         this->elf.program_headers.program_headers.push_back(phdr);
+    }
+    return 0;
+}
+
+int ELFLoader::_loadSegments() {
+    LOGD("ELF", "Loading Segments");
+    for (size_t i = 0; i < this->elf.program_headers.program_headers.size(); i++)
+    {
+        Elf64_Phdr phdr = this->elf.program_headers.program_headers[i];
+        elf_loaded_segment_t segment;
+        segment.guest_vaddr = phdr.p_vaddr;
+        segment.size = phdr.p_memsz;
+        segment.host_ptr = g_vmem + segment.guest_vaddr;
+        segment.flags = BSDFlagsToPOSIXFlags(phdr.p_flags);
+        
+        if (phdr.p_type == PT_LOAD) { // PT_LOAD
+            if (this->debugEnabled == true) {
+                LOGD("ELF", "Loading segment %zu: HAddr: 0x%016lx, Size: %lu, Flags: 0x%08x", i, segment.host_ptr, segment.size, segment.flags);
+            }
+            fseek(this->elf.file.file, phdr.p_offset + this->elf.file_offset, SEEK_SET);
+            fread((void*)segment.host_ptr, 1, phdr.p_filesz, this->elf.file.file);
+        } else if (phdr.p_type == PT_DYNAMIC) { // PT_DYNAMIC
+            if (this->debugEnabled == true) {
+                LOGD("ELF", "Dynamic segment found at index %zu, dylink is supported ish. but that for later..", i);
+            }
+        } 
     }
     return 0;
 }
@@ -92,7 +120,6 @@ int ELFLoader::debugInfo(){
     return 0;
 }
 
-
 int ELFLoader::load() {
     if (!this->elf.runtime.header_read) {
         LOGE("ELF", "Header not read. Call setPath() first.");
@@ -108,17 +135,18 @@ int ELFLoader::load() {
     this->elf.program_headers.program_header_entry = this->elf.ELF64_header.e_phoff;
     this->elf.loaded_segments.clear();
     this->_loadProgramHeaders();
+    this->_loadSegments();
     LOGI("ELF", "Loaded %zu program headers", this->elf.program_headers.program_headers.size());
     return 0;
 }
 
-// int ELFLoader::BSDFlagsToPOSIXFlags(uint32_t bsd_flags) {
-//     int posix_flags = 0;
-//     if (bsd_flags & 0x1) posix_flags |= PROT_EXEC;
-//     if (bsd_flags & 0x2) posix_flags |= PROT_WRITE;
-//     if (bsd_flags & 0x4) posix_flags |= PROT_READ;
-//     return posix_flags;
-// }
+int ELFLoader::BSDFlagsToPOSIXFlags(uint32_t bsd_flags) {
+    int posix_flags = 0;
+    if (bsd_flags & 0x1) posix_flags |= PROT_EXEC;
+    if (bsd_flags & 0x2) posix_flags |= PROT_WRITE;
+    if (bsd_flags & 0x4) posix_flags |= PROT_READ;
+    return posix_flags;
+}
 
 
 SELFLoader::SELFLoader() {
