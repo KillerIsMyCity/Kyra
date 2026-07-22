@@ -19,7 +19,7 @@ uint8_t *vmem_init()
         exit(EXIT_FAILURE);
     }
 
-    LOGI("VMEM", "Allocated virtual memory at %p", g_vmem);
+    // LOGI("VMEM", "Allocated virtual memory at %p", g_vmem);
     return g_vmem;
 }
 
@@ -29,7 +29,7 @@ void vmem_free(void *base)
         perror("munmap");
         LOGE("VMEM", "Failed to free virtual memory");
     } else {
-        LOGI("VMEM", "Freed virtual memory at %p", base);
+        // LOGI("VMEM", "Freed virtual memory at %p", base);
     }
 
     if (base == g_vmem)

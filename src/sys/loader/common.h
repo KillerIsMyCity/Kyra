@@ -153,6 +153,7 @@ typedef struct {
 typedef struct {
     Elf64_Ehdr ELF64_header; // The ELF header
     Self64_Ehdr SELF64_header; // The SELF header (Fucking Sony)
+    std::vector<Self64_segment_t> SELF64_segments; 
     elf_program_header_t program_headers;
     elf_file_t file; // ELF file descriptor 
     elf_ptr_t elf_ptr; // Pointer to the mapped ELF file in memory

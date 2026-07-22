@@ -9,6 +9,7 @@
 class ELFV2Loader {
 public:
     elf_t elf;
+    bool debugEnabled = false;
     
     ELFV2Loader();
     int setPath(const char* path);

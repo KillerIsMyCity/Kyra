@@ -156,15 +156,12 @@ int ELFV2Loader::_loadSELFsegments() {
     int segment_count = this->elf.SELF64_header.segment_count;
     LOGI("ELF", "Loading %d SELF segments", segment_count);
     int loadsize = sizeof(Self64_segment_t) * segment_count;
-    std::vector<Self64_segment_t> segments(segment_count);
     fseek(this->elf.file.file, sizeof(Self64_Ehdr), SEEK_SET);
-    fread(segments.data(), 1, loadsize, this->elf.file.file);
-    for (int i = 0; i < segment_count; i++) {
-        LOGD("ELF", "Segment %d: Type: 0x%lx, Offset: 0x%lx, Compressed Size: %lu, Decompressed Size: %lu", i, segments[i].type, segments[i].offset, segments[i].compressed_size, segments[i].decompressed_size);
-        fseek(this->elf.file.file, segments[i].offset, SEEK_SET);
-        uint8_t tempBuffer[4];
-        fread(tempBuffer, 1, 4, this->elf.file.file);
-        LOGD("ELF", "First 4 bytes of segment %d: 0x%02x%02x%02x%02x", i, tempBuffer[0], tempBuffer[1], tempBuffer[2], tempBuffer[3]); 
+    fread(this->elf.SELF64_segments.data(), 1, loadsize, this->elf.file.file);
+    if (this->debugEnabled == true) {
+        for (int i = 0; i < segment_count; i++) {
+            LOGD("ELF", "Segment %d: Type: 0x%lx, Offset: 0x%lx, Compressed Size: %lu, Decompressed Size: %lu", i, this->elf.SELF64_segments[i].type, this->elf.SELF64_segments[i].offset, this->elf.SELF64_segments[i].compressed_size, this->elf.SELF64_segments[i].decompressed_size);    
+       }
     }
     return 0;
        

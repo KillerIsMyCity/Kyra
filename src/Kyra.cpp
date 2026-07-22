@@ -25,7 +25,7 @@ void helpHandler(int argc, char *argv[])
         cur = cur->next;
     }
 }
-void elfloader(int argc, char *argv[])
+void load(int argc, char *argv[])
 {
     if (argc < 2)
     {
@@ -33,8 +33,11 @@ void elfloader(int argc, char *argv[])
         return;
     }
 
+    LOGI("MAIN", "Starting Kyra - PS5 Translation Layer");
     const char *elf_path = argv[1];
     ELFV2Loader V2ELF;
+    V2ELF.debugEnabled = true;
+
     LOGI("MAIN", "Loading ELF file: %s", elf_path);
     if (V2ELF.setPath(elf_path) != 0) {
         LOGE("MAIN", "Failed to set zELF file path: %s", elf_path);
@@ -43,20 +46,12 @@ void elfloader(int argc, char *argv[])
     LOGI("MAIN", "ELF file type: %s", V2ELF.isELF() ? "ELF" : (V2ELF.isSELF() ? "SELF" : "Unknown"));
     V2ELF.debugInfo();
     V2ELF.load();
+    
+
+    LOGI("MAIN", "Exiting Kyra");
+    
     return;
 }
-// void selfloader(int argc, char *argv[])
-// {
-//     if (argc < 2)
-//     {
-//         printf("Usage: SELF_Test <path_to_self>\n");
-//         return;
-//     }
-//     const char *self_path = argv[1];
-//     SELFLoader loader;
-//     LOGI("SELF", "Loading SELF file: %s", std::filesystem::path(self_path).filename().string().c_str());
-//     loader.loadSELF(self_path);
-// }
 void appdata(int argc, char *argv[])
 {
     if (argc < 2)
@@ -86,26 +81,23 @@ void signalHandler(int signum) {
     _exit(EXIT_FAILURE);
 }
 
-int main(int argc, char* argv[]) {
-    LOGI("MAIN", "Starting Kyra - PS5 Translation Layer");
+void cmdReg(){
     cmd.registerCommand("help", "Displays this help message", helpHandler);
-    // cmd.registerCommand("ELF_Test", "Test ELF loading", elfloader);
-    // cmd.registerCommand("SELF_Test", "Test SELF loading", selfloader);
-    cmd.registerCommand("load", "Load an ELF file", elfloader);
-    cmd.registerCommand("APP_Data", "Get's the game's parameters", appdata);
+    cmd.registerCommand("load", "Load an ELF file", load);
+    // cmd.registerCommand("APP_Data", "Get's the game's parameters", appdata);
     
+}
+
+int main(int argc, char* argv[]) {
     g_vmem = vmem_init();
+    cmdReg();
     signal(SIGINT, signalHandler);
     signal(SIGTERM, signalHandler);
     
     cmd.argParse(argc, argv);
-    // std::vector<std::string> args;
-    // cmd.getArguments(argc, argv, args);
-    // if (args.size() < 2) {
-
-    // Pause for 10 seconds
-    // sleep(10);
-    LOGI("MAIN", "Exiting Kyra");
-    vmem_free(g_vmem);
+    
+    vmem_free(g_vmem);    
     return 0;
 }
+
+
