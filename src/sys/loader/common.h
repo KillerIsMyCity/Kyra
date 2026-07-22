@@ -133,10 +133,16 @@ typedef enum {
 typedef struct {
     elf_type_t type;
     int uuid;
+    elf_file_type_t file_type;
+} elf_runtime_t;
+
+typedef struct {
+    elf_type_t type;
+    int uuid;
     bool header_read;
     bool header_parsed;
     elf_file_type_t file_type;
-} elf_runtime_t;
+} self_runtime_t;
 
 typedef struct {
     uint64_t program_header_entry;
@@ -152,8 +158,7 @@ typedef struct {
 
 typedef struct {
     Elf64_Ehdr ELF64_header; // The ELF header
-    Self64_Ehdr SELF64_header; // The SELF header (Fucking Sony)
-    std::vector<Self64_segment_t> SELF64_segments; 
+    
     elf_program_header_t program_headers;
     elf_file_t file; // ELF file descriptor 
     elf_ptr_t elf_ptr; // Pointer to the mapped ELF file in memory
@@ -161,6 +166,14 @@ typedef struct {
     std::vector<elf_loaded_segment_t> loaded_segments; 
     std::vector<std::string> dependencies; // List of shared library dependencies
 } elf_t;
+
+
+typedef struct {
+    Self64_Ehdr SELF64_header;
+    std::vector<Self64_segment_t> SELF64_segments; 
+    elf_file_t file;
+    self_runtime_t runtime;  // Runtime information about the ELF (not used byt the translation layer)
+} self_t;
 
 typedef struct {
     int64_t d_tag;     // Dynamic entry type

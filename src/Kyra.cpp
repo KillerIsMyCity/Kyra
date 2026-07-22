@@ -1,7 +1,5 @@
 #include "tools/cmd.h"
-// #include "sys/loader/ELF.h"
-// #include "sys/loader/SELF.h"
-#include "sys/loader/ELFV2.h"
+#include "sys/loader/ELF.h"
 #include "sys/launcher.h"
 #include "sys/vmem.h"
 #include <signal.h>
@@ -29,24 +27,24 @@ void load(int argc, char *argv[])
 {
     if (argc < 2)
     {
-        printf("Usage: load <path_to_elf>\n");
+        printf("Usage: load <path_to_self>\n");
         return;
     }
 
     LOGI("MAIN", "Starting Kyra - PS5 Translation Layer");
-    const char *elf_path = argv[1];
-    ELFV2Loader V2ELF;
-    V2ELF.debugEnabled = true;
+    const char *self_path = argv[1];
+    SELFLoader selfLoader;
+    selfLoader.debugEnabled = true;
 
-    LOGI("MAIN", "Loading ELF file: %s", elf_path);
-    if (V2ELF.setPath(elf_path) != 0) {
-        LOGE("MAIN", "Failed to set zELF file path: %s", elf_path);
+    LOGI("MAIN", "Loading SELF file: %s", self_path);
+    if (selfLoader.setPath(self_path) != 0) {
+        LOGE("MAIN", "Failed to set SELF file path: %s", self_path);
         return;
     }
-    LOGI("MAIN", "ELF file type: %s", V2ELF.isELF() ? "ELF" : (V2ELF.isSELF() ? "SELF" : "Unknown"));
-    V2ELF.debugInfo();
-    V2ELF.load();
-    
+    LOGI("MAIN", "SELF file type: %s", (selfLoader.isSELF() ? "SELF" : "Unknown"));
+    selfLoader.debugInfo();
+    selfLoader.load();
+
 
     LOGI("MAIN", "Exiting Kyra");
     
