@@ -133,20 +133,14 @@ typedef enum {
 typedef struct {
     elf_type_t type;
     int uuid;
+    bool header_read;
+    bool header_parsed;
     elf_file_type_t file_type;
 } elf_runtime_t;
 
 typedef struct {
-    elf_type_t type;
-    int uuid;
-    bool header_read;
-    bool header_parsed;
-    elf_file_type_t file_type;
-} self_runtime_t;
-
-typedef struct {
     uint64_t program_header_entry;
-    Elf64_Phdr* program_headers;
+    std::vector<Elf64_Phdr> program_headers;
 } elf_program_header_t;
 
 typedef struct {
@@ -158,21 +152,22 @@ typedef struct {
 
 typedef struct {
     Elf64_Ehdr ELF64_header; // The ELF header
-    
     elf_program_header_t program_headers;
     elf_file_t file; // ELF file descriptor 
     elf_ptr_t elf_ptr; // Pointer to the mapped ELF file in memory
     elf_runtime_t runtime;  // Runtime information about the ELF (not used byt the translation layer)
     std::vector<elf_loaded_segment_t> loaded_segments; 
     std::vector<std::string> dependencies; // List of shared library dependencies
+    int file_offset; // Offset of the ELF file within the SELF
 } elf_t;
 
 
 typedef struct {
     Self64_Ehdr SELF64_header;
     std::vector<Self64_segment_t> SELF64_segments; 
+    std::vector<elf_t> _elfs; // List of imported ELF files from SELF
     elf_file_t file;
-    self_runtime_t runtime;  // Runtime information about the ELF (not used byt the translation layer)
+    elf_runtime_t runtime;  // Runtime information about the ELF (not used byt the translation layer)
 } self_t;
 
 typedef struct {

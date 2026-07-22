@@ -1,8 +1,128 @@
 #include "ELF.h"
 #include "../../tools/log.h"
 
+ELFLoader::ELFLoader() {
+    this->elf = {};
+    this->elf.runtime.header_read = false;
+    this->elf.runtime.header_parsed = false;
+    this->elf.program_headers.program_headers.clear();
+    this->elf.file_offset = 0;
+};
+
+int ELFLoader::setPath(const char* path) {
+    this->path = path;
+    this->elf.file.file = fopen(path, "rb");
+    if (!this->elf.file.file) {
+        LOGE("ELF", "Failed to open file: %s", path);
+        return -1;
+    }
+    return 0;
+}
+
+int ELFLoader::importFromSELF(self_t* self) {
+    if (self->runtime.file_type != SELF_FILE) {
+        LOGE("ELF", "Provided file is not a valid SELF file.");
+        return -1;
+    }
+    LOGI("ELF", "Importing ELF from SELF");
+    this->elf.file_offset = 0x1A0; // rn hardcoded, TODO Change it
+    this->elf.file.file = self->file.file;
+    this->elf.runtime.file_type = ELF_FILE;
+    
+
+    fseek(self->file.file,this->elf.file_offset , SEEK_SET);
+    fread(&this->elf.ELF64_header, 1, sizeof(Elf64_Ehdr), self->file.file);
+    this->elf.runtime.header_parsed = true;
+    
+    if (this->elf.ELF64_header.ident.EI_MAGIC[0] != 0x7F || this->elf.ELF64_header.ident.EI_MAGIC[1] != 'E' || this->elf.ELF64_header.ident.EI_MAGIC[2] != 'L' || this->elf.ELF64_header.ident.EI_MAGIC[3] != 'F') {
+        LOGE("ELF", "Invalid ELF magic number in SELF file.");
+        return -1;
+    }
+    // if (this->elf.ELF64_header.e_type != 2){
+    //     LOGE("ELF", "Invalid ELF type in SELF file. Expected 2 (Executable), got %d", this->elf.ELF64_header.e_type);
+    //     return -1;
+    // }
+    // TODO ADd more checks
+    this->elf.runtime.header_read = true;
+    
+    return 0;
+}
+
+int ELFLoader::_loadHeader() { // only for when importing from file, not from SELF
+    // fseek(this->elf.file.file, 0, SEEK_SET);
+    // fread(&this->elf.ELF64_header, 1, sizeof(Elf64_Ehdr), this->elf.file.file);
+    // return 0;
+    // TODO
+}
+
+int ELFLoader::_loadProgramHeaders(){
+    LOGD("ELF", "Loading Program Headers");
+    for (size_t i = 0; i < this->elf.ELF64_header.e_phnum; i++)
+    {
+        Elf64_Phdr phdr;
+        int offset = this->elf.ELF64_header.e_phoff + i * sizeof(Elf64_Phdr) + this->elf.file_offset;
+        fseek(this->elf.file.file, offset, SEEK_SET);
+        fread(&phdr, 1, sizeof(Elf64_Phdr), this->elf.file.file);
+        if (this->debugEnabled == true) {
+            LOGD("ELF", "Program Header %zu: Type: 0x%08x, Offset: 0x%016lx, VAddr: 0x%016lx, PAddr: 0x%016lx, FileSz: %lu, MemSz: %lu, Flags: 0x%08x, Align: %lu", i, phdr.p_type, phdr.p_offset, phdr.p_vaddr, phdr.p_paddr, phdr.p_filesz, phdr.p_memsz, phdr.p_flags, phdr.p_align);
+        }
+        this->elf.program_headers.program_headers.push_back(phdr);
+    }
+    return 0;
+}
+
+int ELFLoader::debugInfo(){
+    if (this->elf.runtime.header_parsed && this->elf.runtime.header_read) {
+        LOGD("ELF", "ELF Header Info:");
+        LOGD("ELF", "  Magic: 0x%02x%02x%02x%02x", this->elf.ELF64_header.ident.EI_MAGIC[0], this->elf.ELF64_header.ident.EI_MAGIC[1], this->elf.ELF64_header.ident.EI_MAGIC[2], this->elf.ELF64_header.ident.EI_MAGIC[3]);
+        LOGD("ELF", "  Entry Point: 0x%016lx", this->elf.ELF64_header.e_entry);
+        LOGD("ELF", "  Program Header Offset: 0x%016lx", this->elf.ELF64_header.e_phoff);
+        LOGD("ELF", "  Section Header Offset: 0x%016lx", this->elf.ELF64_header.e_shoff);
+        LOGD("ELF", "  Flags: 0x%08x", this->elf.ELF64_header.e_flags);
+        LOGD("ELF", "  ELF Header Size: %d bytes", this->elf.ELF64_header.e_ehsize);
+        LOGD("ELF", "  Program Header Entry Size: %d bytes", this->elf.ELF64_header.e_phentsize);
+        LOGD("ELF", "  Number of Program Headers: %d", this->elf.ELF64_header.e_phnum);
+        LOGD("ELF", "  Section Header Entry Size: %d bytes", this->elf.ELF64_header.e_shentsize);
+        LOGD("ELF", "  Number of Section Headers: %d", this->elf.ELF64_header.e_shnum);
+        LOGD("ELF", "  Section Header String Table Index: %d", this->elf.ELF64_header.e_shstrndx);
+    } else {
+        LOGE("ELF", "Header not read or parsed. Call setPath() and ensure header is loaded first.");
+        return -1;
+    }
+    return 0;
+}
+
+
+int ELFLoader::load() {
+    if (!this->elf.runtime.header_read) {
+        LOGE("ELF", "Header not read. Call setPath() first.");
+        return -1;
+    }
+    if (!this->elf.runtime.header_parsed) {
+        if (_loadHeader() != 0) {
+            LOGE("ELF", "Failed to load header for file: %s", this->path);
+            return -1;
+        }
+    }
+    LOGI("ELF", "Loading ELF file");
+    this->elf.program_headers.program_header_entry = this->elf.ELF64_header.e_phoff;
+    this->elf.loaded_segments.clear();
+    this->_loadProgramHeaders();
+    LOGI("ELF", "Loaded %zu program headers", this->elf.program_headers.program_headers.size());
+    return 0;
+}
+
+// int ELFLoader::BSDFlagsToPOSIXFlags(uint32_t bsd_flags) {
+//     int posix_flags = 0;
+//     if (bsd_flags & 0x1) posix_flags |= PROT_EXEC;
+//     if (bsd_flags & 0x2) posix_flags |= PROT_WRITE;
+//     if (bsd_flags & 0x4) posix_flags |= PROT_READ;
+//     return posix_flags;
+// }
+
+
 SELFLoader::SELFLoader() {
-    this->self = {};
+    // this->self = {};
     this->self.runtime.header_read = false;
     this->self.runtime.header_parsed = false;
 };
@@ -80,8 +200,6 @@ int SELFLoader::debugInfo(){
     }
 }
 
-
-
 int SELFLoader::load() {
     if (!this->self.runtime.header_read) {
         LOGE("SELF", "Header not read. Call setPath() first.");
@@ -128,6 +246,22 @@ int SELFLoader::_loadSELFsegments() {
         LOGI("SELF", "All segments are uncompressed.");
     }
     
+
+    // if there are multiple elfs in there then load all of them
+    // rn the asumption is that there only 1 -_-    TODO: fix
+    ELFLoader elfLoader;
+    elfLoader.debugEnabled = this->debugEnabled;
+    LOGI("SELF", "Importing ELF from SELF");
+    if (elfLoader.importFromSELF(&this->self) != 0) {
+        LOGE("SELF", "Failed to import ELF from SELF");
+        return -1;
+    }
+    elfLoader.debugInfo();
+    elfLoader.load();
+
+    this->self._elfs.push_back(elfLoader.elf);
     return 0;
        
 }
+
+
