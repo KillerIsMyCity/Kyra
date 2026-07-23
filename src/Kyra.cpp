@@ -27,25 +27,63 @@ void load(int argc, char *argv[])
 {
     if (argc < 2)
     {
-        printf("Usage: load <path_to_self>\n");
+        printf("Usage: load <path_to_elf_or_self>\n");
         return;
     }
 
-    LOGI("MAIN", "Starting Kyra - PS5 Translation Layer");
-    const char *self_path = argv[1];
+    LOGI("MAIN", "=== Kyra - PS5 Translation Layer ===");
+    const char *file_path = argv[1];
+
+    LOGI("MAIN", "Loading: %s", file_path);
+
     SELFLoader selfLoader;
     selfLoader.debugEnabled = true;
+    elf_t* mainElf = nullptr;
 
-    LOGI("MAIN", "Loading SELF file: %s", self_path);
-    if (selfLoader.setPath(self_path) != 0) {
-        LOGE("MAIN", "Failed to set SELF file path: %s", self_path);
+    if (selfLoader.setPath(file_path) != 0) {
+        LOGE("MAIN", "Failed to open file: %s", file_path);
         return;
     }
-    LOGI("MAIN", "SELF file type: %s", (selfLoader.isSELF() ? "SELF" : "Unknown"));
-    selfLoader.debugInfo();
-    selfLoader.load();
 
+    if (selfLoader.isSELF()) {
+        LOGI("MAIN", "File type: SELF");
+        selfLoader.debugInfo();
 
+        if (selfLoader.load() != 0) {
+            LOGE("MAIN", "Failed to load SELF file");
+            return;
+        }
+        LOGI("MAIN", "SELF loaded successfully");
+
+        if (!selfLoader.self._elfs.empty()) {
+            mainElf = &selfLoader.self._elfs.back();
+        }
+    } else {
+        LOGI("MAIN", "File type: ELF (raw)");
+        if (selfLoader.self.file.file) {
+            fclose(selfLoader.self.file.file);
+            selfLoader.self.file.file = nullptr;
+        }
+
+        ELFLoader elfLoader;
+        elfLoader.debugEnabled = true;
+
+        if (elfLoader.setPath(file_path) != 0) {
+            LOGE("MAIN", "Failed to open ELF file: %s", file_path);
+            return;
+        }
+
+        if (elfLoader.load() != 0) {
+            LOGE("MAIN", "Failed to load ELF file");
+            return;
+        }
+        LOGI("MAIN", "ELF loaded successfully");
+        elfLoader.debugInfo();
+
+        selfLoader.self._elfs.push_back(elfLoader.elf);
+        mainElf = &selfLoader.self._elfs.back();
+    }
+    
     LOGI("MAIN", "Exiting Kyra");
     
     return;
