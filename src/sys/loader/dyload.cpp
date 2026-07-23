@@ -6,7 +6,7 @@
 int DynamicLoader::parseDynamicSection(elf_t* elf, Elf64_Phdr dynamic_header) {
 
 
-    uintptr_t host_dynamic_segment_addr = GUEST_BASE_ADDR + dynamic_header.p_vaddr;
+    uintptr_t host_dynamic_segment_addr = (uintptr_t)(g_vmem + dynamic_header.p_vaddr);
     Elf64_Dyn* dyn_table = reinterpret_cast<Elf64_Dyn*>(host_dynamic_segment_addr);
 
     uintptr_t strtab_vaddr = 0;

@@ -35,6 +35,7 @@ public:
     int load();
     int debugInfo();
 private:
+    int _protectSegments();
     int _loadHeader();
     int _loadProgramHeaders();
     int _loadSegments();

@@ -1,6 +1,8 @@
 #include "ELF.h"
 #include "../../tools/log.h"
 #include "../vmem.h"
+#include <string.h>
+#include "dyload.h"
 
 ELFLoader::ELFLoader() {
     this->elf = {};
@@ -78,23 +80,53 @@ int ELFLoader::_loadSegments() {
     for (size_t i = 0; i < this->elf.program_headers.program_headers.size(); i++)
     {
         Elf64_Phdr phdr = this->elf.program_headers.program_headers[i];
-        elf_loaded_segment_t segment;
-        segment.guest_vaddr = phdr.p_vaddr;
-        segment.size = phdr.p_memsz;
-        segment.host_ptr = g_vmem + segment.guest_vaddr;
-        segment.flags = BSDFlagsToPOSIXFlags(phdr.p_flags);
         
         if (phdr.p_type == PT_LOAD) { // PT_LOAD
+            elf_loaded_segment_t segment;
+            segment.guest_vaddr = phdr.p_vaddr;
+            segment.size = phdr.p_memsz;
+            segment.host_ptr = g_vmem + segment.guest_vaddr;
+            segment.flags = BSDFlagsToPOSIXFlags(phdr.p_flags);
             if (this->debugEnabled == true) {
                 LOGD("ELF", "Loading segment %zu: HAddr: 0x%016lx, Size: %lu, Flags: 0x%08x", i, segment.host_ptr, segment.size, segment.flags);
             }
             fseek(this->elf.file.file, phdr.p_offset + this->elf.file_offset, SEEK_SET);
-            fread((void*)segment.host_ptr, 1, phdr.p_filesz, this->elf.file.file);
-        } else if (phdr.p_type == PT_DYNAMIC) { // PT_DYNAMIC
-            if (this->debugEnabled == true) {
-                LOGD("ELF", "Dynamic segment found at index %zu, dylink is supported ish. but that for later..", i);
+            if (phdr.p_filesz > 0) {
+                fread((void*)segment.host_ptr, 1, phdr.p_filesz, this->elf.file.file);
             }
+
+            if (phdr.p_memsz > phdr.p_filesz) {
+                size_t bss_size = phdr.p_memsz - phdr.p_filesz;
+                uint8_t* bss_ptr = (uint8_t*)segment.host_ptr + phdr.p_filesz;
+                memset(bss_ptr, 0, bss_size);
+            }
+            this->elf.loaded_segments.push_back(segment);
         } 
+        else if (phdr.p_type == PT_DYNAMIC) { // PT_DYNAMIC
+            LOGD("ELF", "Found PT_DYNAMIC segment at VAddr: 0x%016lx, Size: %lu", phdr.p_vaddr, phdr.p_memsz);
+            DynamicLoader::parseDynamicSection(&this->elf, phdr);
+            
+        } 
+        
+    }
+    return 0;
+}
+
+int ELFLoader::_protectSegments() {
+    LOGD("ELF", "Setting segment protections flags");
+    long page_size = sysconf(_SC_PAGESIZE);
+    uintptr_t page_mask = ~(page_size - 1);
+
+    for (size_t i = 0; i < this->elf.loaded_segments.size(); i++)
+    {
+        elf_loaded_segment_t segment = this->elf.loaded_segments[i];
+        uintptr_t aligned_addr = (uintptr_t)segment.host_ptr & page_mask;
+        size_t aligned_size = ((segment.size + page_size - 1) / page_size) * page_size;
+
+        if (mprotect((void*)aligned_addr, aligned_size, segment.flags) != 0) {
+            LOGE("ELF", "Failed to set protection flags for segment %zu: %s", i, strerror(errno));
+            return -1;
+        }
     }
     return 0;
 }
@@ -136,6 +168,7 @@ int ELFLoader::load() {
     this->elf.loaded_segments.clear();
     this->_loadProgramHeaders();
     this->_loadSegments();
+    this->_protectSegments();
     LOGI("ELF", "Loaded %zu program headers", this->elf.program_headers.program_headers.size());
     return 0;
 }
@@ -234,14 +267,14 @@ int SELFLoader::load() {
         return -1;
     }
     if (!this->self.runtime.header_parsed) {
-        if (_loadHeader() != 0) {
+        if (this->_loadHeader() != 0) {
             LOGE("SELF", "Failed to load header for file: %s", this->path);
             return -1;
         }
     }
     if (this->self.runtime.file_type == SELF_FILE) {
         LOGI("SELF", "Loading SELF file: %s", this->path);
-        if (SELFLoader::_loadSELFsegments()) {
+        if (this->_loadSELFsegments()) {
         }
         return -1;
     } else {
